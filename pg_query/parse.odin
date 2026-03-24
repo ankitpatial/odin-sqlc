@@ -82,14 +82,24 @@ parse :: proc(
 		}
 
 		if loc, ok := stmt_obj["stmt_location"]; ok {
-			if loc_int, lok := loc.(json.Integer); lok {
-				ps.location = i32(loc_int)
+			#partial switch v in loc {
+			case json.Integer:
+				ps.location = i32(v)
+			case json.Float:
+				ps.location = i32(v)
+			case:
+			// ignore
 			}
 		}
 
 		if slen, ok := stmt_obj["stmt_len"]; ok {
-			if len_int, lok := slen.(json.Integer); lok {
-				ps.length = i32(len_int)
+			#partial switch v in slen {
+			case json.Integer:
+				ps.length = i32(v)
+			case json.Float:
+				ps.length = i32(v)
+			case:
+			// ignore
 			}
 		}
 
