@@ -1,0 +1,4 @@
+{
+  "process": "sqlc-gen-test",
+  "os": ["linux", "darwin"]
+}

@@ -1,0 +1,2 @@
+# package override
+error generating code: bad syntax for struct tag pair

@@ -1,0 +1,7 @@
+version: 1
+packages:
+  - path: "go"
+    name: "querytest"
+    engine: "postgresql"
+    schema: "schema.sql"
+    queries: "query.sql"
