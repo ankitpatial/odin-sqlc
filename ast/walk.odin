@@ -65,6 +65,10 @@ walk_children :: proc(node: ^Node, visitor: Visitor, user_data: rawptr) {
 		walk(n.limit_offset, visitor, user_data)
 		walk(n.limit_count, visitor, user_data)
 		walk_list(n.locking_clause, visitor, user_data)
+		// values_lists is [dynamic][dynamic]^Node — walk each inner list
+		for vl in n.values_lists {
+			walk_list(vl, visitor, user_data)
+		}
 		// Typed pointer children — wrap in temp Node to walk
 		if n.with_clause != nil {
 			walk_list(n.with_clause.ctes, visitor, user_data)
