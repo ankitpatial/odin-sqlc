@@ -1195,6 +1195,15 @@ build_create_schema_stmt :: proc(obj: json.Object, allocator: mem.Allocator) -> 
 	}
 }
 
+// Note: libpg_query emits DropStmt with OBJECT_SCHEMA for DROP SCHEMA.
+// This builder exists for completeness; translate.odin may produce this type.
+build_drop_schema_stmt :: proc(obj: json.Object) -> Drop_Schema_Stmt {
+	return Drop_Schema_Stmt{
+		behavior   = convert_drop_behavior(obj, "behavior"),
+		missing_ok = get_bool(obj, "missingOk"),
+	}
+}
+
 build_create_view_stmt :: proc(obj: json.Object, allocator: mem.Allocator) -> Create_View_Stmt {
 	return Create_View_Stmt{
 		view              = get_range_var(obj, "view", allocator),
