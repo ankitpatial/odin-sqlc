@@ -113,3 +113,42 @@ test_convert_param_ref :: proc(t: ^testing.T) {
 	testing.expect(t, prok, "expected Param_Ref")
 	testing.expect_value(t, pr.number, i32(1))
 }
+
+@(test)
+test_translate_create_table_not_null :: proc(t: ^testing.T) {
+	sql := "CREATE TABLE users (id serial PRIMARY KEY, name text NOT NULL, email text)"
+	stmts, err := pg_query.parse(sql)
+	testing.expect(t, err == nil, "parse failed")
+
+	node := ast.translate(stmts[0].stmt_json)
+	testing.expect(t, node != nil, "translate returned nil")
+
+	ct, ok := node^.(ast.Create_Table_Stmt)
+	testing.expect(t, ok, "expected Create_Table_Stmt")
+	testing.expect_value(t, len(ct.table_elts), 3)
+
+	cd0, cd0ok := ct.table_elts[0]^.(ast.Column_Def)
+	testing.expect(t, cd0ok, "expected Column_Def")
+	testing.expect_value(t, cd0.colname, "id")
+	testing.expect(t, cd0.is_not_null, "id should be NOT NULL (primary key)")
+
+	cd1, cd1ok := ct.table_elts[1]^.(ast.Column_Def)
+	testing.expect(t, cd1ok, "expected Column_Def")
+	testing.expect_value(t, cd1.colname, "name")
+	testing.expect(t, cd1.is_not_null, "name should be NOT NULL")
+
+	cd2, cd2ok := ct.table_elts[2]^.(ast.Column_Def)
+	testing.expect(t, cd2ok, "expected Column_Def")
+	testing.expect_value(t, cd2.colname, "email")
+	testing.expect(t, !cd2.is_not_null, "email should be nullable")
+}
+
+@(test)
+test_translate_select_passthrough :: proc(t: ^testing.T) {
+	stmts, err := pg_query.parse("SELECT 1")
+	testing.expect(t, err == nil, "parse failed")
+
+	node := ast.translate(stmts[0].stmt_json)
+	_, ok := node^.(ast.Select_Stmt)
+	testing.expect(t, ok, "SELECT should pass through translate to convert_node")
+}
