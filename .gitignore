@@ -2,3 +2,4 @@
 go-sqlc
 vendor/libpg_query/lib/
 vendor/libpg_query/include/
+sqld
