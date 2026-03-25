@@ -4,6 +4,8 @@ import "core:encoding/json"
 import "core:os"
 import "core:fmt"
 import "core:strings"
+import "core:path/filepath"
+import "core:slice"
 
 VERSION :: "1"
 
@@ -105,6 +107,42 @@ error_message :: proc(err: Error) -> string {
 	case .Missing_Engine:  return "sql entry missing 'engine' field"
 	}
 	return "unknown error"
+}
+
+// Expand glob patterns in paths to sorted file lists.
+// e.g. "schema/*.sql" → ["schema/0001_city.sql", "schema/0002_venue.sql"]
+expand_paths :: proc(paths: Paths, allocator := context.allocator) -> ([dynamic]string, bool) {
+	result := make([dynamic]string, 0, len(paths) * 4, allocator)
+
+	for pattern in paths {
+		// Check if it contains glob characters
+		if strings.contains_any(pattern, "*?[") {
+			matches, g_err := filepath.glob(pattern, allocator)
+			if g_err != nil || matches == nil {
+				// Try as literal path
+				if os.exists(pattern) {
+					append(&result, strings.clone(pattern, allocator))
+				} else {
+					fmt.eprintf("error: no files match pattern '%s'\n", pattern)
+					return {}, false
+				}
+				continue
+			}
+			// Sort for deterministic ordering (important for schema migrations)
+			slice.sort(matches[:])
+			for m in matches {
+				append(&result, m)
+			}
+		} else {
+			if !os.exists(pattern) {
+				fmt.eprintf("error: file not found '%s'\n", pattern)
+				return {}, false
+			}
+			append(&result, strings.clone(pattern, allocator))
+		}
+	}
+
+	return result, true
 }
 
 // Read all SQL files matching the paths (supports globs).

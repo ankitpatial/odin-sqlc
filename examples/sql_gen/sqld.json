@@ -1,0 +1,20 @@
+{
+  "version": "1",
+  "sql": [
+    {
+      "schema": [
+        "schema/*.sql"
+      ],
+      "queries": [
+        "query/*.sql"
+      ],
+      "engine": "postgresql",
+      "gen": {
+        "odin": {
+          "package": "db",
+          "out": "db"
+        }
+      }
+    }
+  ]
+}

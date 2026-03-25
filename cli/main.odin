@@ -43,7 +43,7 @@ print_usage :: proc() {
 	fmt.println("  init        Create a sqld.json config file")
 	fmt.println("  compile     Check SQL for syntax errors")
 	fmt.println("  parse       Parse SQL and show AST")
-	fmt.println("  generate    Generate Odin code from SQL (not yet implemented)")
+	fmt.println("  generate    Generate Odin code from SQL")
 	fmt.println("  version     Print version")
 	fmt.println()
 	fmt.println("Flags:")
