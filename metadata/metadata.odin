@@ -157,8 +157,86 @@ parse_queries :: proc(
 }
 
 Query_Entry :: struct {
-	meta: Metadata,
-	sql:  string, // the SQL text for this query (without the annotation comment)
+	meta:        Metadata,
+	sql:         string,            // the SQL text (with @params normalized to $N)
+	param_names: map[i32]string,    // positional number → original @param name (empty if no named params)
+}
+
+// normalize_named_params replaces @identifier tokens in SQL with $1, $2, ...
+// and returns a mapping from position number to the original name (without @).
+// If the same @name appears multiple times, it reuses the same $N.
+normalize_named_params :: proc(
+	sql: string,
+	allocator := context.allocator,
+) -> (string, map[i32]string) {
+	names := make(map[i32]string, 8, allocator)
+	seen  := make(map[string]i32, 8, context.temp_allocator)  // name → $N number
+	counter: i32 = 0
+
+	buf := strings.builder_make(allocator)
+	i := 0
+	for i < len(sql) {
+		ch := sql[i]
+
+		// Check for @identifier
+		if ch == '@' && i + 1 < len(sql) && is_ident_start(sql[i + 1]) {
+			// Extract the identifier
+			start := i + 1
+			end := start
+			for end < len(sql) && is_ident_char(sql[end]) {
+				end += 1
+			}
+			name := sql[start:end]
+
+			// Look up or assign a positional number
+			num, found := seen[name]
+			if !found {
+				counter += 1
+				num = counter
+				seen[name] = num
+				names[num] = strings.clone(name, allocator)
+			}
+
+			strings.write_byte(&buf, '$')
+			write_i32(&buf, num)
+			i = end
+		} else {
+			strings.write_byte(&buf, ch)
+			i += 1
+		}
+	}
+
+	return strings.to_string(buf), names
+}
+
+@(private)
+is_ident_start :: proc(ch: u8) -> bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+}
+
+@(private)
+is_ident_char :: proc(ch: u8) -> bool {
+	return is_ident_start(ch) || (ch >= '0' && ch <= '9')
+}
+
+@(private)
+write_i32 :: proc(buf: ^strings.Builder, v: i32) {
+	tmp: [12]u8
+	n := 0
+	val := v
+	if val == 0 {
+		strings.write_byte(buf, '0')
+		return
+	}
+	for val > 0 {
+		tmp[n] = u8(val % 10) + '0'
+		val /= 10
+		n += 1
+	}
+	// Reverse
+	for j := n - 1; j >= 0; j -= 1 {
+		strings.write_byte(buf, tmp[j])
+	}
 }
 
 // ── Helpers ───────────────────────────────────────────────────

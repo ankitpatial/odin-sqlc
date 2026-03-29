@@ -1,5 +1,6 @@
 package codegen
 
+import "core:fmt"
 import "../ast"
 import "../catalog"
 import "../metadata"
@@ -255,7 +256,8 @@ resolve_insert_params :: proc(
 
 	// Walk the VALUES list to build param→column mapping.
 	// Match each VALUES expression to its corresponding INSERT column by position.
-	// This correctly handles non-param expressions like NOW().
+	// This correctly handles non-param expressions like NOW() and params nested
+	// inside function calls like NULLIF(@category_id, 0).
 	if ins.select_stmt != nil {
 		if sel, ok := ins.select_stmt^.(ast.Select_Stmt); ok {
 			for vl in sel.values_lists {
@@ -263,25 +265,39 @@ resolve_insert_params :: proc(
 					if val_node == nil {continue}
 					if col_idx >= len(col_names) {continue}
 
-					if pr, prok := val_node^.(ast.Param_Ref); prok {
-						col_name := col_names[col_idx]
-						param := Query_Param {
-							number   = pr.number,
-							not_null = true,
-						}
-						if tbl != nil {
-							if col := catalog.find_column(tbl, col_name); col != nil {
-								param.name = col.name
-								param.data_type = col.data_type
-								param.is_array = col.is_array
-								param.is_enum = catalog.is_enum_type(cat, col.data_type)
-								if param.is_enum {param.enum_name = to_pascal_case(col.data_type)}
-							}
-						}
-						if len(param.data_type) == 0 {param.data_type = "text"}
-						if len(param.name) == 0 {param.name = col_name}
-						add_param(&q.params, param)
+					col_name := col_names[col_idx]
+
+					// Walk the value node to find any Param_Ref (may be nested in NULLIF etc.)
+					Insert_Val_Ctx :: struct {
+						params:   ^[dynamic]Query_Param,
+						col_name: string,
+						tbl:      ^catalog.Table,
+						cat:      ^catalog.Catalog,
 					}
+					val_ctx := Insert_Val_Ctx{&q.params, col_name, tbl, cat}
+
+					ast.walk(val_node, proc(n: ^ast.Node, data: rawptr) -> bool {
+						c := cast(^Insert_Val_Ctx)data
+						if pr, prok := n^.(ast.Param_Ref); prok {
+							param := Query_Param {
+								number   = pr.number,
+								not_null = true,
+							}
+							if c.tbl != nil {
+								if col := catalog.find_column(c.tbl, c.col_name); col != nil {
+									param.name = col.name
+									param.data_type = col.data_type
+									param.is_array = col.is_array
+									param.is_enum = catalog.is_enum_type(c.cat, col.data_type)
+									if param.is_enum {param.enum_name = to_pascal_case(col.data_type)}
+								}
+							}
+							if len(param.data_type) == 0 {param.data_type = "text"}
+							if len(param.name) == 0 {param.name = c.col_name}
+							add_param(c.params, param)
+						}
+						return true
+					}, &val_ctx)
 				}
 			}
 		}
@@ -351,7 +367,7 @@ resolve_update_params :: proc(
 				}
 
 				if len(param.data_type) == 0 {param.data_type = "text"}
-				if len(param.name) == 0 {param.name = param.data_type}
+				if len(param.name) == 0 {param.name = fmt.aprintf("param_%d", param.number)}
 				add_param(c.params, param)
 			}
 			return true
@@ -390,7 +406,7 @@ resolve_params_from_node :: proc(
 			if pr, ok := n^.(ast.Param_Ref); ok {
 				param := resolve_param_from_context(pr, c.tbl, c.cat)
 				if len(param.data_type) == 0 {param.data_type = "text"}
-				if len(param.name) == 0 {param.name = param.data_type}
+				if len(param.name) == 0 {param.name = fmt.aprintf("param_%d", param.number)}
 				add_param(c.params, param)
 			}
 			return true

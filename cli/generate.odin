@@ -129,7 +129,16 @@ analyze_query_files :: proc(
 		base := filepath.base(path)
 		entries := metadata.parse_queries(sql, base)
 
-		for entry in entries {
+		for &entry in entries {
+			// Normalize @param syntax to $N before parsing
+			if len(entry.param_names) == 0 {
+				normalized, param_names := metadata.normalize_named_params(entry.sql)
+				if len(param_names) > 0 {
+					entry.sql = normalized
+					entry.param_names = param_names
+				}
+			}
+
 			q, ok := codegen.analyze_query(entry, cat)
 			if !ok {
 				fmt.eprintf("warning: could not analyze query '%s' in %s\n", entry.meta.name, path)
@@ -150,6 +159,15 @@ analyze_query_files :: proc(
 					codegen.analyze_from_ast(&q, node, cat)
 					// Also resolve params from WHERE context
 					resolve_where_params(&q, node, cat)
+				}
+			}
+
+			// Apply @param names to resolved params
+			if len(entry.param_names) > 0 {
+				for &p in q.params {
+					if name, has := entry.param_names[p.number]; has {
+						p.name = name
+					}
 				}
 			}
 

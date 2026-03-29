@@ -751,7 +751,7 @@ write_exec_query :: proc(
 	ws(buf, n_str)
 	ws(buf, ",\n")
 	ws(buf, "\t\tnil,\n")
-	ws(buf, "\t\t&param_values,\n")
+	ws(buf, "\t\traw_data(&param_values),\n")
 	ws(buf, "\t\tnil,\n")
 	ws(buf, "\t\tnil,\n")
 	ws(buf, "\t\t.Text,\n")
