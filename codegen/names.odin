@@ -3,8 +3,32 @@ package codegen
 import "core:strings"
 import "core:unicode/utf8"
 
-// Convert "foo_bar" or "fooBar" to "Foo_Bar" (Odin struct convention).
+// Convert "foo_bar" or "fooBar" to "FooBar" (PascalCase).
 to_pascal_case :: proc(s: string, allocator := context.allocator) -> string {
+	if len(s) == 0 {return ""}
+	buf := strings.builder_make(allocator)
+	capitalize_next := true
+	for ch in s {
+		if ch == '_' || ch == ' ' || ch == '-' {
+			capitalize_next = true
+			continue
+		}
+		if capitalize_next {
+			if ch >= 'a' && ch <= 'z' {
+				strings.write_rune(&buf, ch - 'a' + 'A')
+			} else {
+				strings.write_rune(&buf, ch)
+			}
+			capitalize_next = false
+		} else {
+			strings.write_rune(&buf, ch)
+		}
+	}
+	return strings.to_string(buf)
+}
+
+// Convert "foo_bar" to "Foo_Bar" (PascalCase with underscores preserved).
+to_pascal_snake :: proc(s: string, allocator := context.allocator) -> string {
 	if len(s) == 0 {return ""}
 	buf := strings.builder_make(allocator)
 	capitalize_next := true

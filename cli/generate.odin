@@ -68,7 +68,7 @@ cmd_generate :: proc(args: []string) {
 		queries := analyze_query_files(query_paths[:], cat)
 
 		// Phase 3: Generate code
-		files := codegen.generate(cat, queries[:], pkg_name, out_dir)
+		files := codegen.generate(cat, queries[:], pkg_name, out_dir, odin_gen.naming)
 
 		// Phase 4: Write files
 		if !codegen.write_files(files[:]) {

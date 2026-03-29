@@ -7,6 +7,7 @@ import "core:slice"
 import "core:strings"
 
 import "../catalog"
+import "../config"
 import "../metadata"
 
 // Embed the pg/ package source files at compile time.
@@ -37,6 +38,7 @@ generate :: proc(
 	queries: []Query,
 	pkg_name: string,
 	out_dir: string,
+	naming: config.Naming = .pascal,
 	allocator := context.allocator,
 ) -> [dynamic]Generated_File {
 	files := make([dynamic]Generated_File, 0, 8, allocator)
@@ -113,6 +115,7 @@ generate :: proc(
 			refs,
 			shared_tables,
 			shared_enums,
+			naming,
 			allocator,
 		)
 		append(
@@ -248,6 +251,7 @@ gen_query_file :: proc(
 	refs: ^Model_Refs,
 	shared_tables: map[string]bool,
 	shared_enums: map[string]bool,
+	naming: config.Naming = .pascal,
 	allocator := context.allocator,
 ) -> string {
 	buf := strings.builder_make(allocator)
@@ -283,7 +287,7 @@ gen_query_file :: proc(
 
 	// Write query procs
 	for q in queries {
-		gen_query(&buf, q, cat, allocator)
+		gen_query(&buf, q, cat, naming, allocator)
 	}
 
 	return strings.to_string(buf)
@@ -387,6 +391,7 @@ gen_query :: proc(
 	buf: ^strings.Builder,
 	q: ^Query,
 	cat: ^catalog.Catalog,
+	naming: config.Naming = .pascal,
 	allocator := context.allocator,
 ) {
 	// Doc comments
@@ -412,9 +417,18 @@ gen_query :: proc(
 
 	needs_params_struct := len(q.params) > 1
 
+	// Helper to build a type name respecting the naming config.
+	make_type_name :: proc(name: string, suffix: string, n: config.Naming, alloc := context.allocator) -> string {
+		switch n {
+		case .pascal_snake: return strings.concatenate({to_pascal_snake(name, alloc), "_", suffix}, alloc)
+		case .pascal:       return strings.concatenate({to_pascal_case(name, alloc), suffix}, alloc)
+		}
+		return strings.concatenate({to_pascal_case(name, alloc), suffix}, alloc)
+	}
+
 	// Params struct
 	if needs_params_struct {
-		params_struct := strings.concatenate({q.name, "_Params"}, allocator)
+		params_struct := make_type_name(q.name, "Params", naming, allocator)
 		ws(buf, params_struct)
 		wl(buf, " :: struct {")
 		for p in q.params {
@@ -434,7 +448,7 @@ gen_query :: proc(
 	result_struct_name := ""
 
 	if needs_result_struct {
-		result_struct_name = strings.concatenate({q.name, "_Row"}, allocator)
+		result_struct_name = make_type_name(q.name, "Row", naming, allocator)
 		ws(buf, result_struct_name)
 		wl(buf, " :: struct {")
 		for col in q.columns {
@@ -469,6 +483,7 @@ gen_query :: proc(
 			const_name,
 			return_type,
 			needs_params_struct,
+			naming,
 			allocator,
 		)
 	case .Many:
@@ -480,14 +495,15 @@ gen_query :: proc(
 			const_name,
 			return_type,
 			needs_params_struct,
+			naming,
 			allocator,
 		)
 	case .Exec:
-		gen_exec_proc(buf, q, cat, proc_name, const_name, needs_params_struct, allocator)
+		gen_exec_proc(buf, q, cat, proc_name, const_name, needs_params_struct, naming, allocator)
 	case .Exec_Result:
-		gen_exec_result_proc(buf, q, cat, proc_name, const_name, needs_params_struct, allocator)
+		gen_exec_result_proc(buf, q, cat, proc_name, const_name, needs_params_struct, naming, allocator)
 	case .Exec_Rows:
-		gen_exec_rows_proc(buf, q, cat, proc_name, const_name, needs_params_struct, allocator)
+		gen_exec_rows_proc(buf, q, cat, proc_name, const_name, needs_params_struct, naming, allocator)
 	}
 }
 
@@ -536,11 +552,12 @@ gen_one_proc :: proc(
 	cat: ^catalog.Catalog,
 	proc_name, const_name, return_type: string,
 	has_params_struct: bool,
+	naming: config.Naming = .pascal,
 	allocator := context.allocator,
 ) {
 	ws(buf, proc_name)
 	ws(buf, " :: proc(conn: pg.Conn")
-	write_proc_params(buf, q, has_params_struct, allocator)
+	write_proc_params(buf, q, has_params_struct, naming, allocator)
 	ws(buf, ") -> (")
 	ws(buf, return_type)
 	ws(buf, ", pg.Error) {\n")
@@ -591,11 +608,12 @@ gen_many_proc :: proc(
 	cat: ^catalog.Catalog,
 	proc_name, const_name, return_type: string,
 	has_params_struct: bool,
+	naming: config.Naming = .pascal,
 	allocator := context.allocator,
 ) {
 	ws(buf, proc_name)
 	ws(buf, " :: proc(conn: pg.Conn")
-	write_proc_params(buf, q, has_params_struct, allocator)
+	write_proc_params(buf, q, has_params_struct, naming, allocator)
 	ws(buf, ", allocator := context.allocator) -> ([]")
 	ws(buf, return_type)
 	ws(buf, ", pg.Error) {\n")
@@ -623,11 +641,12 @@ gen_exec_proc :: proc(
 	cat: ^catalog.Catalog,
 	proc_name, const_name: string,
 	has_params_struct: bool,
+	naming: config.Naming = .pascal,
 	allocator := context.allocator,
 ) {
 	ws(buf, proc_name)
 	ws(buf, " :: proc(conn: pg.Conn")
-	write_proc_params(buf, q, has_params_struct, allocator)
+	write_proc_params(buf, q, has_params_struct, naming, allocator)
 	ws(buf, ") -> pg.Error {\n")
 	write_exec_query(buf, q, const_name, has_params_struct, allocator)
 	ws(buf, "\terr := pg.check_result(res)\n")
@@ -642,11 +661,12 @@ gen_exec_result_proc :: proc(
 	cat: ^catalog.Catalog,
 	proc_name, const_name: string,
 	has_params_struct: bool,
+	naming: config.Naming = .pascal,
 	allocator := context.allocator,
 ) {
 	ws(buf, proc_name)
 	ws(buf, " :: proc(conn: pg.Conn")
-	write_proc_params(buf, q, has_params_struct, allocator)
+	write_proc_params(buf, q, has_params_struct, naming, allocator)
 	ws(buf, ") -> (pg.Result, pg.Error) {\n")
 	write_exec_query(buf, q, const_name, has_params_struct, allocator)
 	ws(buf, "\terr := pg.check_result(res)\n")
@@ -660,11 +680,12 @@ gen_exec_rows_proc :: proc(
 	cat: ^catalog.Catalog,
 	proc_name, const_name: string,
 	has_params_struct: bool,
+	naming: config.Naming = .pascal,
 	allocator := context.allocator,
 ) {
 	ws(buf, proc_name)
 	ws(buf, " :: proc(conn: pg.Conn")
-	write_proc_params(buf, q, has_params_struct, allocator)
+	write_proc_params(buf, q, has_params_struct, naming, allocator)
 	ws(buf, ") -> (i64, pg.Error) {\n")
 	write_exec_query(buf, q, const_name, has_params_struct, allocator)
 	ws(buf, "\terr := pg.check_result(res)\n")
@@ -680,13 +701,20 @@ write_proc_params :: proc(
 	buf: ^strings.Builder,
 	q: ^Query,
 	has_params_struct: bool,
+	naming: config.Naming = .pascal,
 	allocator := context.allocator,
 ) {
 	if len(q.params) == 0 {return}
 	if has_params_struct {
 		ws(buf, ", params: ")
-		ws(buf, q.name)
-		ws(buf, "_Params")
+		switch naming {
+		case .pascal_snake:
+			ws(buf, to_pascal_snake(q.name, allocator))
+			ws(buf, "_Params")
+		case .pascal:
+			ws(buf, to_pascal_case(q.name, allocator))
+			ws(buf, "Params")
+		}
 	} else if len(q.params) == 1 {
 		p := q.params[0]
 		ws(buf, ", ")

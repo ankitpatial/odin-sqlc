@@ -9,9 +9,17 @@ import "core:slice"
 
 VERSION :: "1"
 
+// Naming style for generated type names (structs, enums).
+// Proc names are always snake_case.
+Naming :: enum {
+	pascal,       // "ProductCreateParams" (default)
+	pascal_snake, // "Product_Create_Params"
+}
+
 Odin_Gen :: struct {
 	package_name: string `json:"package"`,
 	out:          string `json:"out"`,
+	naming:       Naming `json:"naming"`,
 }
 
 Gen :: struct {
