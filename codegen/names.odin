@@ -13,6 +13,7 @@ to_pascal_case :: proc(s: string, allocator := context.allocator) -> string {
 			capitalize_next = true
 			continue
 		}
+
 		if capitalize_next {
 			if ch >= 'a' && ch <= 'z' {
 				strings.write_rune(&buf, ch - 'a' + 'A')

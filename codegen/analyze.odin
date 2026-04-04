@@ -1,9 +1,9 @@
 package codegen
 
-import "core:fmt"
 import "../ast"
 import "../catalog"
 import "../metadata"
+import "core:fmt"
 
 // Analyzed query with resolved types.
 Query :: struct {
@@ -256,8 +256,8 @@ resolve_insert_params :: proc(
 
 	// Walk the VALUES list to build param→column mapping.
 	// Match each VALUES expression to its corresponding INSERT column by position.
-	// This correctly handles non-param expressions like NOW() and params nested
-	// inside function calls like NULLIF(@category_id, 0).
+	// This correctly handles non-param expressions like NOW(), and also params
+	// wrapped in function calls like NULLIF(@param, 0::bigint) or LOWER(@param).
 	if ins.select_stmt != nil {
 		if sel, ok := ins.select_stmt^.(ast.Select_Stmt); ok {
 			for vl in sel.values_lists {
@@ -267,19 +267,20 @@ resolve_insert_params :: proc(
 
 					col_name := col_names[col_idx]
 
-					// Walk the value node to find any Param_Ref (may be nested in NULLIF etc.)
-					Insert_Val_Ctx :: struct {
-						params:   ^[dynamic]Query_Param,
-						col_name: string,
-						tbl:      ^catalog.Table,
-						cat:      ^catalog.Catalog,
+					// Walk the value expression tree to find any Param_Ref nodes.
+					// This handles both direct params ($1) and params inside
+					// function calls like NULLIF($5, ...) or LOWER($1).
+					Insert_Param_Ctx :: struct {
+						params:    ^[dynamic]Query_Param,
+						col_name:  string,
+						tbl:       ^catalog.Table,
+						cat:       ^catalog.Catalog,
 					}
-					val_ctx := Insert_Val_Ctx{&q.params, col_name, tbl, cat}
-
+					ictx := Insert_Param_Ctx{&q.params, col_name, tbl, cat}
 					ast.walk(val_node, proc(n: ^ast.Node, data: rawptr) -> bool {
-						c := cast(^Insert_Val_Ctx)data
+						c := cast(^Insert_Param_Ctx)data
 						if pr, prok := n^.(ast.Param_Ref); prok {
-							param := Query_Param {
+							param := Query_Param{
 								number   = pr.number,
 								not_null = true,
 							}
@@ -297,7 +298,7 @@ resolve_insert_params :: proc(
 							add_param(c.params, param)
 						}
 						return true
-					}, &val_ctx)
+					}, &ictx)
 				}
 			}
 		}
@@ -367,7 +368,7 @@ resolve_update_params :: proc(
 				}
 
 				if len(param.data_type) == 0 {param.data_type = "text"}
-				if len(param.name) == 0 {param.name = fmt.aprintf("param_%d", param.number)}
+				if len(param.name) == 0 {param.name = param.data_type}
 				add_param(c.params, param)
 			}
 			return true
@@ -406,7 +407,7 @@ resolve_params_from_node :: proc(
 			if pr, ok := n^.(ast.Param_Ref); ok {
 				param := resolve_param_from_context(pr, c.tbl, c.cat)
 				if len(param.data_type) == 0 {param.data_type = "text"}
-				if len(param.name) == 0 {param.name = fmt.aprintf("param_%d", param.number)}
+				if len(param.name) == 0 {param.name = param.data_type}
 				add_param(c.params, param)
 			}
 			return true
