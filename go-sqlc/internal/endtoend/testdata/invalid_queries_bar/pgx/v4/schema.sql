@@ -1,1 +1,0 @@
-CREATE TABLE foo (bar text not null, baz text not null);

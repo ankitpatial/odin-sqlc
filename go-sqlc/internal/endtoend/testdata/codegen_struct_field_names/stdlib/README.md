@@ -1,1 +1,0 @@
-This tests that Go struct field names are proper Go identifiers.

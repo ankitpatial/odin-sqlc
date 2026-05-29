@@ -1,1 +1,0 @@
-SELECT $tag$This has a ; semicolon$tag$;

@@ -1,1 +1,0 @@
-SELECT $outer$This contains $inner$nested; quote$inner$;$outer$;

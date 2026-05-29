@@ -1,3 +1,0 @@
-Hello!
-
-This file should be ignored

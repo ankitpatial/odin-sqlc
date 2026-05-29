@@ -1,1 +1,0 @@
-SELECT * FROM users /* this has ; in it */;

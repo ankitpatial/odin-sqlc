@@ -1,1 +1,0 @@
-SELECT $$This has a ; semicolon$$;

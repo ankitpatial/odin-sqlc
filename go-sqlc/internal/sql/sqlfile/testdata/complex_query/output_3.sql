@@ -1,1 +1,0 @@
-SELECT "weird;column" FROM users WHERE name = 'test;value';
