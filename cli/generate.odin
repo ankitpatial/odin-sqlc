@@ -2,9 +2,9 @@ package cli
 
 import "core:fmt"
 import "core:os"
-import "core:strings"
 import "core:path/filepath"
 import "core:slice"
+import "core:strings"
 
 import "../config"
 import "../pg_query"
@@ -91,6 +91,13 @@ build_catalog_from_files :: proc(paths: []string) -> ^catalog.Catalog {
 		}
 
 		sql := string(data)
+
+		// Strip "-- migrate:down" section from migration files so that
+		// DROP TABLE statements don't remove tables from the catalog.
+		if down_idx := strings.index(sql, "-- migrate:down"); down_idx >= 0 {
+			sql = sql[:down_idx]
+		}
+
 		parsed, parse_err := pg_query.parse(sql)
 		if parse_err != nil {
 			e := parse_err.?

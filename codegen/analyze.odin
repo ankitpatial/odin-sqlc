@@ -314,15 +314,26 @@ resolve_update_params :: proc(
 	table_name := upd.relation != nil ? upd.relation.relname : ""
 	tbl := catalog.find_table(cat, table_name)
 
-	// Build a mapping from $N → column name from SET clause
+	// Build a mapping from $N → column name from SET clause.
+	// Walk value expressions to find params inside function calls
+	// like NULLIF($4, 0::bigint) or LOWER($1).
 	set_map := make(map[i32]string, 8, context.temp_allocator)
 	for target in upd.target_list {
 		if target == nil {continue}
 		if rt, ok := target^.(ast.Res_Target); ok {
 			if rt.val != nil {
-				if pr, prok := rt.val^.(ast.Param_Ref); prok {
-					set_map[pr.number] = rt.name
+				Set_Map_Ctx :: struct {
+					set_map:  ^map[i32]string,
+					col_name: string,
 				}
+				sctx := Set_Map_Ctx{&set_map, rt.name}
+				ast.walk(rt.val, proc(n: ^ast.Node, data: rawptr) -> bool {
+					c := cast(^Set_Map_Ctx)data
+					if pr, prok := n^.(ast.Param_Ref); prok {
+						c.set_map[pr.number] = c.col_name
+					}
+					return true
+				}, &sctx)
 			}
 		}
 	}
