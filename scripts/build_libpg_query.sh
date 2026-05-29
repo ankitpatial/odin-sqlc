@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 VENDOR_DIR="$PROJECT_DIR/vendor/libpg_query"
-VERSION="17-6.2.0"
+VERSION="18.0.0"
 
 if [ -f "$VENDOR_DIR/lib/libpg_query.a" ]; then
     echo "libpg_query already built at $VENDOR_DIR/lib/libpg_query.a"
